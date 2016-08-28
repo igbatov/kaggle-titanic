@@ -1,0 +1,71 @@
+---
+title: "Titanic data exploration using GLM, LDA, SVN, random forests"
+author: "Igor Batov"
+date: "August 28, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+First of all we want to extract the most influental predictors from GLM point of view.
+Craft some new predictors using our common sense and create subset that has all predictors filled with data. 
+
+```{r cars}
+# Load data
+train <- read.csv('C:/Users/igbatov/Downloads/train.csv')
+# 891 obs.
+dim(train)
+
+# Clean #1 
+# -  remove NA cells
+cTrain = na.omit(train)
+# 891 obs.
+dim(cTrain)
+# - remove unnecesarry predictors
+cTrain = subset(cTrain, select = -c(PassengerId,Ticket) )
+# - set right predictor types
+str(cTrain)
+cTrain$Survived = factor(cTrain$Survived)
+cTrain$Pclass = factor(cTrain$Pclass)
+
+## Create new predictors
+#  - extract Deck from Cabin
+cTrain$CabinLetter = factor(substr(cTrain$Cabin, 1, 1))
+#  - extract cabin number from Cabin
+cTrain$CabinNumber = as.numeric(substr(cTrain$Cabin, 2, 4))
+#  - extract title
+cTrain$Title = factor(gsub('(.*, )|(\\..*)', '', cTrain$Name))
+# - extract Surnames
+cTrain$Surname <- factor(sapply(cTrain$Name, function(x){x=as.character(x); strsplit(x, split = '[,.]')[[1]][1];}))
+
+
+# Clean #2 
+# - remove all rows with empty Deck
+ccTrain = subset(cTrain, CabinLetter != '')
+dim(ccTrain)
+# - remove all not-numeric CabinNumber
+ccTrain = subset(ccTrain, !is.na(CabinNumber))
+dim(ccTrain)
+# - remove all not-numeric CabinNumber
+ccTrain = subset(ccTrain, Embarked != '')
+dim(ccTrain)
+# - make CabinNumber to be a factor
+ccTrain$CabinNumber = factor(ccTrain$CabinNumber);
+```
+
+Ok, we have trimmed out dataset from 891 observations to 176. The most truncating predictor was the CabinLetter. Using GLM we will try to determine if CabinLetter is important and there is need to impute it or we can safely ignore it completely.
+
+```{r}
+glmfit = glm(Survived~.,data=subset(ccTrain,select=-c(Surname,Cabin,Name,CabinNumber)),family=binomial);
+
+summary(glmfit)
+```
+This gives us bad result.
+```{r}
+glmfit = glm(Survived~.,data=subset(ccTrain,select=-c(Surname,Cabin,Name,CabinNumber,Title)),family=binomial);
+summary(glmfit)
+```
+Much better.
