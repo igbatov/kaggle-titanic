@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+## Loading and cleaning data.
 First of all we want to extract the most influental predictors from GLM point of view.
 Craft some new predictors using our common sense and create subset that has all predictors filled with data. 
 
@@ -60,8 +60,11 @@ cTrain$CabinNumber = as.numeric(substr(cTrain$Cabin, 2, 4))
 cTrain$Title = factor(gsub('(.*, )|(\\..*)', '', cTrain$Name))
 # - extract Surnames
 cTrain$Surname <- factor(sapply(cTrain$Name, function(x){x=as.character(x); strsplit(x, split = '[,.]')[[1]][1];}))
+```
 
+## 
 
+```{r}
 # Clean #2 
 # - remove all rows with empty Deck
 ccTrain = subset(cTrain, CabinLetter != '')
@@ -128,20 +131,23 @@ It is also useful to make predictors vs respose plot and look for visual trends 
 plotPredictors('Survived',subset(cTrain,select=-c(Surname,Cabin,Name,CabinNumber,Title,CabinLetter)))
 ``` 
 
+Plot glm predictions to interpret every predictor.
 
 ```{r}
-# Plot glm predictions
 library(effects)
 plot(allEffects(glmfit))
 ```
 
-
-We should also determine if we need to include predictor interactions in lm. Let's look with stepwise regression
+## Using GLM for prediction
+In this section we will use glm to make predictions and will not think about interpritability of the model. Let's try to make glm with all avaliable predictors.
+```{r}
+glmfit = glm(Survived~.^2, data=cTrain, family=binomial);
+```
 
 ```{r}
 # Stepwise Regression
 library(MASS)
-glmfit = glm(Survived~.^2, data=subset(cTrain,select=-c(Surname,Cabin,Name,CabinNumber,Title,CabinLetter)), family=binomial);
+glmfit = glm(Survived~.^2, data=cTrain, family=binomial);
 step <- stepAIC(glmfit, direction="both")
 step$anova # display results
 ```
