@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 First of all we want to extract the most influental predictors from GLM point of view.
 Craft some new predictors using our common sense and create subset that has all predictors filled with data. 
 
-```{r cars}
+```{r}
 
 library(caret)
 
@@ -125,8 +125,13 @@ VIFs are also ok for the whole data.
 ```{r}
 corvif(subset(cTrain,select=-c(Surname,Cabin,Name,CabinNumber,Title,CabinLetter)))
 ```
+It is useful to make residuals vs predictor plots.
+```{r}
+res <- residuals(glmfit)
+plot(cTrain$Sex,res)
 
-It is also useful to make predictors vs respose plot and look for visual trends and non-linearities. Again, quoting [A protocol for data exploration to avoid common statistical problems](http://onlinelibrary.wiley.com/doi/10.1111/j.2041-210X.2009.00001.x/full) "Note that the absence of clear patterns does not mean that there are no relationships; it just means that there are no clear two-way relationships. A model with multiple explanatory variables may still provide a good fit."
+```
+It is also useful to make predictors vs response plot and look for visual trends and non-linearities. Again, quoting [A protocol for data exploration to avoid common statistical problems](http://onlinelibrary.wiley.com/doi/10.1111/j.2041-210X.2009.00001.x/full) "Note that the absence of clear patterns does not mean that there are no relationships; it just means that there are no clear two-way relationships. A model with multiple explanatory variables may still provide a good fit."
 ```{r}
 plotPredictors('Survived',subset(cTrain,select=-c(Surname,Cabin,Name,CabinNumber,Title,CabinLetter)))
 ``` 
@@ -138,25 +143,19 @@ library(effects)
 plot(allEffects(glmfit))
 ```
 
-## Using GLM for prediction
-In this section we will use glm to make predictions and will not think about interpritability of the model. Let's try to make glm with all avaliable predictors.
-```{r}
-glmfit = glm(Survived~.^2, data=cTrain, family=binomial);
-```
-
+We can also consider interaction of predictors.
 ```{r}
 # Stepwise Regression
 library(MASS)
-glmfit = glm(Survived~.^2, data=cTrain, family=binomial);
+glmfit = glm(Survived~.^2, data=subset(cTrain,select=-c(Surname,Cabin,Name,CabinNumber,Title,CabinLetter)), family=binomial);
 step <- stepAIC(glmfit, direction="both")
 step$anova # display results
-```
-
-Again plot glm predictions
-```{r}
-library(effects)
 plot(allEffects(glmfit))
 ```
+However I cannot interpret interaction in this case, so we will end up with conclusion that the significant predictors are Sex, Age, Pclass. With plots showing slope and confidence intervals showed above.
+
+## Using GLM for prediction
+In this section we will use glm to make predictions and will not think about interpritability of the model. 
 
 Though we are not going to use CabinLetter in determing reliabile predictors, we can still use it for overall predictions - [multicollinearity do not make predictions of lm worse](http://blog.minitab.com/blog/adventures-in-statistics/what-are-the-effects-of-multicollinearity-and-when-can-i-ignore-them), it just concerns interpretation of predictors coefficients. 
 
@@ -166,3 +165,22 @@ table(data.frame(Pclass=cTrain$Pclass, CabinLetter=cTrain$CabinLetter))
 
 ```
 It seems that Cabin data is not representative as we have it mostly for first class passengers. Thus we nevertheless are not going to impute and use it.
+
+Let's try to make glm with all avaliable predictors.
+```{r}
+#glmfit = glm(Survived~.^2, data=cTrain, family=binomial);
+```
+
+```{r}
+# Stepwise Regression
+#library(MASS)
+#glmfit = glm(Survived~.^2, data=cTrain, family=binomial);
+#step <- stepAIC(glmfit, direction="both")
+#step$anova # display results
+```
+
+Again plot glm predictions
+```{r}
+#library(effects)
+#plot(allEffects(glmfit))
+```
