@@ -138,6 +138,17 @@ library(effects)
 plot(allEffects(glmfit))
 ```
 
+We can also consider interaction of predictors.
+```{r}
+# Stepwise Regression
+library(MASS)
+glmfit = glm(Survived~.^2, data=subset(cTrain,select=-c(Surname,Cabin,Name,CabinNumber,Title,CabinLetter)), family=binomial);
+step <- stepAIC(glmfit, direction="both")
+step$anova # display results
+plot(allEffects(glmfit))
+```
+However I cannot interpret interaction in this case, so we will end up with conclusion that the significant predictors are Sex, Age, Pclass. With plots showing slope and confidence intervals showed above.
+
 ## Using GLM for prediction
 In this section we will use glm to make predictions and will not think about interpritability of the model. Let's try to make glm with all avaliable predictors.
 ```{r}
