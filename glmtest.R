@@ -1,5 +1,5 @@
-d = data.frame(P=rep(NA,100),R=rep(NA,100));
-for(i in c(1:10)){
+d = data.frame(P=rep(NA,1000),R=rep(NA,1000));
+for(i in c(1:100)){
   for(j in c(1:10)){
     d[(i-1)*10+j,c('P')]=j;
     d[(i-1)*10+j,c('R')]=sample(c("A","B"), size=1, replace=TRUE, prob=c(1/j,(1-1/j)));
@@ -7,7 +7,7 @@ for(i in c(1:10)){
 }
 
 d$R = factor(d$R)
-glmfit = glm(R~P, data=d, family=binomial)
+glmfit = glm(R=='A'~P, data=d, family=binomial)
 print(summary(glmfit))
 print(predict(glmfit, newdata = data.frame(P=c(1:10)), type="response"))
 # plot distribution of response (i.e. 'A' and 'B') 

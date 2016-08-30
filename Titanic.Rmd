@@ -14,10 +14,21 @@ First of all we want to extract the most influental predictors from GLM point of
 Craft some new predictors using our common sense and create subset that has all predictors filled with data. 
 
 ```{r cars}
+library(caret)
+library(Amelia)
+
 # Load data
-train <- read.csv('C:/Users/igbatov/Downloads/train.csv')
+train <- read.csv('C:/Users/igbatov/Downloads/train.csv',na.strings=c(""))
 # 891 obs.
 dim(train)
+# plot missing variables
+missmap(train);
+# check for variables with bad predictive power
+nearZeroVar(train,saveMetrics= TRUE)
+# check how many NA values each predictor has
+sapply(training.data.raw,function(x) sum(is.na(x)))
+# check how many unique valies each predictor has
+sapply(training.data.raw, function(x) length(unique(x)))
 
 # Clean #1 
 # -  remove NA cells
