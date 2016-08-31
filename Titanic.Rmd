@@ -146,8 +146,12 @@ glmfit = glm(Survived~.^2, data=subset(cTrain,select=-c(Surname,Cabin,Name,Cabin
 step <- stepAIC(glmfit, direction="both")
 step$anova # display results
 plot(allEffects(glmfit))
+# return initial layout
+par(mfrow=c(1,1))
 ```
-However I cannot interpret interaction in this case, so we will end up with conclusion that the significant predictors are Sex, Age, Pclass. With plots showing slope and confidence intervals showed above.
+However I cannot interpret interaction in this case.
+Also, because logistic regression doesn't have a specific target function, it is difficult to diagnose the fit. (It is possible to define "residuals" for logistic regression but they are difficult to interpret)[http://alumni.media.mit.edu/~tpminka/courses/36-350.2001/lectures/day31/]. 
+So we will end up with conclusion that the significant predictors are Sex, Age, Pclass. With plots showing slope and confidence intervals showed above.
 
 ## Using GLM for prediction
 In this section we will use glm to make predictions and will not think about interpritability of the model. 
@@ -179,3 +183,7 @@ Again plot glm predictions
 #library(effects)
 #plot(allEffects(glmfit))
 ```
+
+## Conclusion
+There is an opinion that models with many constrains, such as lm, glm
+works better when number of observations is small. Tree models that tend to overfit gives better result when there is a plenty of observations.
