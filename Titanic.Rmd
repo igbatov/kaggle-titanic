@@ -17,7 +17,10 @@ Craft some new predictors using our common sense and create subset that has all 
 # lda()
 library(MASS)
 
-# 
+# impute with missForest()
+library(missForest)
+
+# createDataPartition()
 library(caret)
 
 # for missmap()
@@ -65,7 +68,7 @@ cTrain$Pclass = factor(cTrain$Pclass)
 #  - extract Deck from Cabin
 cTrain$CabinLetter = factor(substr(cTrain$Cabin, 1, 1))
 #  - extract cabin number from Cabin
-cTrain$CabinNumber = as.numeric(substr(cTrain$Cabin, 2, 4))
+cTrain$CabinNumber = factor(as.numeric(substr(cTrain$Cabin, 2, 4)))
 #  - extract title
 cTrain$Title = factor(gsub('(.*, )|(\\..*)', '', cTrain$Name))
 # - extract Surnames
@@ -158,7 +161,7 @@ plot(allEffects(glmfit))
 Finally get confusion matrix for this model
 ```{r}
 # split cTrain on train and test
-set.seed(7826) 
+set.seed(726) 
 inTrain <- createDataPartition(cTrain$Survived, p = 0.7, list = FALSE)
 cTrainTrain <- cTrain[inTrain, ]
 cTrainTest <- cTrain[-inTrain, ]
@@ -194,36 +197,48 @@ So we will end up with conclusion that the significant predictors are Sex, Age, 
 ## Using GLM for prediction
 In this section we will use glm to make predictions and will not think about interpretability of the model. 
 
-Though we are not going to use CabinLetter in determing reliabile predictors, we can still use it for overall predictions - [multicollinearity do not make predictions of lm worse](http://blog.minitab.com/blog/adventures-in-statistics/what-are-the-effects-of-multicollinearity-and-when-can-i-ignore-them), it just concerns interpretation of predictors coefficients. 
-
-Lets look how odd its distribution
+First of all, lets impute all NA data.
 ```{r}
-table(data.frame(Pclass=cTrain$Pclass, CabinLetter=cTrain$CabinLetter))
+# create data from scratch
+train <- read.csv('train.csv',na.strings=c(""))
+train$Pclass = factor(train$Pclass);
+cTrain = subset(train, select=-c(PassengerId,Ticket))
+## Create new predictors
+#  - extract Deck from Cabin
+cTrain$CabinLetter = factor(substr(cTrain$Cabin, 1, 1))
+#  - extract cabin number from Cabin
+cTrain$CabinNumber = factor(as.numeric(substr(cTrain$Cabin, 2, 4)))
+#  - extract title
+cTrain$Title = factor(gsub('(.*, )|(\\..*)', '', cTrain$Name))
+# - extract Surnames
+cTrain$Surname <- factor(sapply(cTrain$Name,function(x){x=as.character(x); strsplit(x, split='[,.]')[[1]][1];}))
 
-```
-It seems that Cabin data is not representative as we have it mostly for first class passengers. Thus we nevertheless are not going to impute and use it.
-
-Let's try to make glm with all avaliable predictors.
-```{r}
-#glmfit = glm(Survived~.^2, data=cTrain, family=binomial);
-```
-
-```{r}
-# Stepwise Regression
-#library(MASS)
-#glmfit = glm(Survived~.^2, data=cTrain, family=binomial);
-#step <- stepAIC(glmfit, direction="both")
-#step$anova # display results
-```
-
-Again plot glm predictions
-```{r}
-#library(effects)
-#plot(allEffects(glmfit))
+# remove factors with more than 53 levels as missForest don't like it
+mf = missForest(subset(cTrain,select=-c(Surname,Name,CabinNumber,Cabin)))
+# check error
+mf$OOBerror
+# add to imputed data skiped columns (except for CabinNumber - it has many NAs)
+cTrain = cbind(mf$ximp,subset(cTrain,select=c(Surname)))
+# check that we have no NA data
+sapply(cTrain, function(x) sum(is.na(x)))
 ```
 
-## LDA
-As we've got good accuracy for GLM, then, maybe we should also give a try to LDA as both of them model log of odds lineary, just with different assumtions about underlying distrubution.
+Note, that though we didn't use CabinLetter in determing reliabile predictors, we can still use it for overall predictions because [multicollinearity do not make predictions of lm worse](http://blog.minitab.com/blog/adventures-in-statistics/what-are-the-effects-of-multicollinearity-and-when-can-i-ignore-them), it just concerns interpretation of predictors coefficients. 
+
+Let's try to make GLM with all avaliable predictors.
+```{r}
+# split cTrain on train and test
+set.seed(726) 
+inTrain <- createDataPartition(cTrain$Survived, p = 0.7, list = FALSE)
+cTrainTrain <- cTrain[inTrain, ]
+cTrainTest <- cTrain[-inTrain, ]
+# make model fit on train data
+glmfit = glm(Survived~., data=cTrainTrain, family=binomial);
+# predict test data
+pr = factor(ifelse(predict(glmfit, newdata = cTrainTest) > 0.5,1,0))
+confusionMatrix(cTrainTest$Survived, pr)
+
+```
 
 
 ## Conclusion
