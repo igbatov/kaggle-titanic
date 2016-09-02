@@ -125,6 +125,8 @@ Much better.
 We saw that there is no use in columns Surname,Cabin,Name,CabinNumber,Title,CabinLetter for glm model that we want to interpret. Let's create glm ignoring these columns and using whole training data and try to check what predictors are the most reliable.
 ```{r}
 cTrain = subset(train,select=-c(Cabin,Name,Ticket,PassengerId))
+#impute Age - this will give us extra 0.01 in prediction accuaracy
+cTrain$Age[is.na(cTrain$Age)] <- mean(cTrain$Age,na.rm=T)
 cTrain = na.omit(cTrain)
 dim(cTrain)
 cTrain$Survived = factor(cTrain$Survived)
@@ -166,6 +168,9 @@ glmfit = glm(Survived~.,data=cTrainTrain,family=binomial);
 pr = factor(ifelse(predict(glmfit, newdata = cTrainTest) > 0.5,1,0))
 confusionMatrix(cTrainTest$Survived, pr)
 ```
+Тотаl accuracy is 0.8233. Accuracy in predicting those who survived is 83% (68/81). Accuracy in predicting those who not survived is 81% (151/185). We can say that sensitivity is 83% while specificity is 81%.
+
+If there were plenty of observations we would do downsample to assess accuracy more accurately.
 
 We can also consider interaction of predictors.
 ```{r}
@@ -181,7 +186,7 @@ par(mfrow=c(1,1))
 However I am not sure how to interpret this interactions.
 
 I should note that because logistic regression doesn't have a specific target function, it is difficult to diagnose the fit. (It is possible to define "residuals" for logistic regression but they are difficult to interpret)[http://alumni.media.mit.edu/~tpminka/courses/36-350.2001/lectures/day31/]. 
-So we will end up with conclusion that the significant predictors are Sex, Age, Pclass. With plots showing slope and confidence intervals showed above.
+So we will end up with conclusion that the significant predictors are Sex, Age, Pclass, SibSp. With slope and confidence intervals showed above.
 
 ## Using GLM for prediction
 In this section we will use glm to make predictions and will not think about interpretability of the model. 
