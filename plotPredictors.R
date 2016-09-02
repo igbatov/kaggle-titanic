@@ -10,5 +10,8 @@ plotPredictors = function(respname,data){
   for(predname in colnames(data)){
     if(predname == respname) next();
     print(plot(data[,c(respname)], data[,c(predname)], xlab=respname, ylab=predname))
-  } 
+  }
+  
+  # default par
+  par(mfrow=c(1,1));
 }

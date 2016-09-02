@@ -24,13 +24,20 @@ library(caret)
 library(Amelia)
 
 # for corvif() function
-source("http://www.highstat.com/Book2/HighstatLibV6.R")
+source("HighstatLibV6.R")
+
+# plotPredictors()
+source('plotPredictors.R')
 
 # for ggpairs() function
 library(GGally)
 
 # Load data
 train <- read.csv('train.csv',na.strings=c(""))
+test <- read.csv('test.csv',na.strings=c(""))
+# cast right datatypes on test
+cTest$Pclass = factor(cTest$Pclass)
+
 # 891 obs.
 dim(train)
 # plot missing variables
@@ -38,9 +45,9 @@ missmap(train);
 # check for variables with bad predictive power
 nearZeroVar(train,saveMetrics= TRUE)
 # check how many NA values each predictor has
-sapply(training.data.raw,function(x) sum(is.na(x)))
+sapply(train, function(x) sum(is.na(x)))
 # check how many unique valies each predictor has
-sapply(training.data.raw, function(x) length(unique(x)))
+sapply(train, function(x) length(unique(x)))
 
 # Clean #1 
 # -  remove NA cells
@@ -82,12 +89,12 @@ dim(ccTrain)
 ccTrain$CabinNumber = factor(ccTrain$CabinNumber);
 ```
 
-Ok, we have trimmed out dataset from 891 observations to 176. The most truncating predictor was the CabinLetter. Using GLM we will try to determine if CabinLetter is important and there is need to impute it or we can safely ignore it completely.
+Ok, we have trimmed out dataset from 891 observations to 176. The most truncating predictor was the CabinLetter. Using GLM we will try to determine if CabinLetter is important and if there is need to impute it or we can safely ignore it completely.
 
 ```{r}
 glmfit = glm(Survived~.,data=subset(ccTrain,select=-c(Surname,Cabin,Name,CabinNumber)),family=binomial);
 ```
-This gives use Error. Lets look what variables can cause this. The suspicious looks CabinNumber with 86 levels from 176 observations.
+This gives use Error. Lets look what variables can cause this. The CabinNumber looks suspicious with 86 levels from 176 observations.
 ```{r}
 levels(ccTrain$CabinNumber)
 ```
@@ -118,20 +125,27 @@ summary(glmfit)
 ```
 Much better.
 
-Let's create glm ignoring these columns using whole training data and try to check what predictors are the most reliable.
+We saw that there is no use in columns Surname,Cabin,Name,CabinNumber,Title,CabinLetter for glm model that we want to interpret. Let's create glm ignoring these columns and using whole training data and try to check what predictors are the most reliable.
 ```{r}
-glmfit = glm(Survived~.,data=subset(cTrain,select=-c(Surname,Cabin,Name,CabinNumber,Title,CabinLetter)),family=binomial);
+cTrain = subset(train,select=-c(Cabin,Name,Ticket,PassengerId))
+#impute Age - this will give us extra 0.01 in prediction accuaracy
+cTrain$Age[is.na(cTrain$Age)] <- mean(cTrain$Age,na.rm=T)
+cTrain = na.omit(cTrain)
+dim(cTrain)
+cTrain$Survived = factor(cTrain$Survived)
+cTrain$Pclass = factor(cTrain$Pclass)
+glmfit = glm(Survived~.,data=cTrain,family=binomial);
 summary(glmfit)
 ```
-We see that to the reliable predictors that we saw on partial data glm trained on the whole data added a few more - Sibsp and Pclass.
+We see that the reliable predictors are the same as those we saw on partial data glm plus Pclass and SibSp
 VIFs are also ok for the whole data.
 ```{r}
-corvif(subset(cTrain,select=-c(Surname,Cabin,Name,CabinNumber,Title,CabinLetter)))
+corvif(cTrain)
 ```
 
 It is also useful to make predictors vs response plot and look for visual trends and non-linearities. Again, quoting [A protocol for data exploration to avoid common statistical problems](http://onlinelibrary.wiley.com/doi/10.1111/j.2041-210X.2009.00001.x/full) "Note that the absence of clear patterns does not mean that there are no relationships; it just means that there are no clear two-way relationships. A model with multiple explanatory variables may still provide a good fit."
 ```{r}
-plotPredictors('Survived',subset(cTrain,select=-c(Surname,Cabin,Name,CabinNumber,Title,CabinLetter)))
+plotPredictors('Survived',cTrain)
 ``` 
 
 Plot glm predictions to interpret every predictor.
@@ -141,23 +155,44 @@ library(effects)
 plot(allEffects(glmfit))
 ```
 
+Finally get confusion matrix for this model
+```{r}
+# split cTrain on train and test
+set.seed(7826) 
+inTrain <- createDataPartition(cTrain$Survived, p = 0.7, list = FALSE)
+cTrainTrain <- cTrain[inTrain, ]
+cTrainTest <- cTrain[-inTrain, ]
+# check how data is splitted
+table(cTrainTrain$Survived)
+table(cTrainTest$Survived)
+# make model fit on train data
+glmfit = glm(Survived~.,data=cTrainTrain,family=binomial);
+# predict test data
+pr = factor(ifelse(predict(glmfit, newdata = cTrainTest) > 0.5,1,0))
+confusionMatrix(cTrainTest$Survived, pr)
+```
+Тотаl accuracy is 0.8233. Accuracy in predicting those who survived is 83% (68/81). Accuracy in predicting those who not survived is 81% (151/185). We can say that sensitivity is 83% while specificity is 81%.
+
+If there were plenty of observations we would do downsample to assess accuracy more accurately.
+
 We can also consider interaction of predictors.
 ```{r eval=FALSE}
 # Stepwise Regression
 library(MASS)
-glmfit = glm(Survived~.^2, data=subset(cTrain,select=-c(Surname,Cabin,Name,CabinNumber,Title,CabinLetter)), family=binomial);
+glmfit = glm(Survived~.^2, cTrain, family=binomial);
 step <- stepAIC(glmfit, direction="both")
 step$anova # display results
 plot(allEffects(glmfit))
 # return initial layout
 par(mfrow=c(1,1))
 ```
-However I cannot interpret interaction in this case.
-Also, because logistic regression doesn't have a specific target function, it is difficult to diagnose the fit. (It is possible to define "residuals" for logistic regression but they are difficult to interpret)[http://alumni.media.mit.edu/~tpminka/courses/36-350.2001/lectures/day31/]. 
-So we will end up with conclusion that the significant predictors are Sex, Age, Pclass. With plots showing slope and confidence intervals showed above.
+However I am not sure how to interpret this interactions.
+
+I should note that because logistic regression doesn't have a specific target function, it is difficult to diagnose the fit. (It is possible to define "residuals" for logistic regression but they are difficult to interpret)[http://alumni.media.mit.edu/~tpminka/courses/36-350.2001/lectures/day31/]. 
+So we will end up with conclusion that the significant predictors are Sex, Age, Pclass, SibSp. With slope and confidence intervals showed above.
 
 ## Using GLM for prediction
-In this section we will use glm to make predictions and will not think about interpritability of the model. 
+In this section we will use glm to make predictions and will not think about interpretability of the model. 
 
 Though we are not going to use CabinLetter in determing reliabile predictors, we can still use it for overall predictions - [multicollinearity do not make predictions of lm worse](http://blog.minitab.com/blog/adventures-in-statistics/what-are-the-effects-of-multicollinearity-and-when-can-i-ignore-them), it just concerns interpretation of predictors coefficients. 
 
