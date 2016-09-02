@@ -14,7 +14,10 @@ First of all we want to extract the most influental predictors from GLM point of
 Craft some new predictors using our common sense and create subset that has all predictors filled with data. 
 
 ```{r}
+# lda()
+library(MASS)
 
+# 
 library(caret)
 
 # for missmap()
@@ -139,7 +142,7 @@ plot(allEffects(glmfit))
 ```
 
 We can also consider interaction of predictors.
-```{r}
+```{r eval=FALSE}
 # Stepwise Regression
 library(MASS)
 glmfit = glm(Survived~.^2, data=subset(cTrain,select=-c(Surname,Cabin,Name,CabinNumber,Title,CabinLetter)), family=binomial);
@@ -184,6 +187,9 @@ Again plot glm predictions
 #plot(allEffects(glmfit))
 ```
 
+## LDA
+As we've got good accuracy for GLM, then, maybe we should also give a try to LDA as both of them model log of odds lineary, just with different assumtions about underlying distrubution.
+
+
 ## Conclusion
-There is an opinion that models with many constrains, such as lm, glm
-works better when number of observations is small. Tree models that tend to overfit gives better result when there is a plenty of observations.
+There is an opinion that for data with small number of observation we should minimize variance and thus select models with many constrains, such as lm, glm, lda. For data with many observations, we can guess that sample distribution is close to real one and thus we just need to fit it well (and minimize bias instead of variance), so tree models, QDA, KNN and others that tend to overfit gives better results.
