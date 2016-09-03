@@ -1,5 +1,5 @@
 ---
-title: "Titanic data exploration using GLM, LDA, SVN, random forests"
+title: "Titanic data exploration using GLM, SVN, xgboost, random forests"
 author: "Igor Batov"
 date: "August 28, 2016"
 output: html_document
@@ -169,8 +169,6 @@ pr = factor(ifelse(predict(glmfit, newdata = cTrainTest) > 0.5,1,0))
 confusionMatrix(cTrainTest$Survived, pr)
 ```
 Тотаl accuracy is 0.8233. Accuracy in predicting those who survived is 83% (68/81). Accuracy in predicting those who not survived is 81% (151/185). We can say that sensitivity is 83% while specificity is 81%.
-
-If there were plenty of observations we would do downsample to assess accuracy more accurately.
 
 We can also consider interaction of predictors.
 ```{r}
