@@ -1,5 +1,5 @@
 ---
-title: "Titanic data exploration using GLM, SVN, xgboost, random forests"
+title: "Titanic data exploration using GLM, KNN, SVN, xgboost, random forests"
 author: "Igor Batov"
 date: "August 28, 2016"
 output: html_document
@@ -14,6 +14,9 @@ First of all we want to extract the most influental predictors from GLM point of
 Craft some new predictors using our common sense and create subset that has all predictors filled with data. 
 
 ```{r}
+# logistf()
+library(logistf)
+
 # lda()
 library(MASS)
 
@@ -34,7 +37,8 @@ source('plotPredictors.R')
 
 # for ggpairs() function
 library(GGally)
-
+```
+```{r}
 # Load data
 train <- read.csv('train.csv',na.strings=c(""))
 test <- read.csv('test.csv',na.strings=c(""))
@@ -230,8 +234,14 @@ set.seed(726)
 inTrain <- createDataPartition(cTrain$Survived, p = 0.7, list = FALSE)
 cTrainTrain <- cTrain[inTrain, ]
 cTrainTest <- cTrain[-inTrain, ]
-# make model fit on train data
-glmfit = glm(Survived~., data=cTrainTrain, family=binomial);
+# this gives perfect split error
+#glmfit = glm(Survived~., data=cTrainTrain, family=binomial);
+```
+Gives perfect split warning. Use penalized GLM (Firth’s penalized-likelihood logistic regression) instead
+```{r}
+# this takes too long too compute
+#glmfit = logistf(Survived~., data=cTrainTrain, family=binomial);
+
 # predict test data
 pr = factor(ifelse(predict(glmfit, newdata = cTrainTest) > 0.5,1,0))
 confusionMatrix(cTrainTest$Survived, pr)
