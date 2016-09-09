@@ -14,6 +14,12 @@ First of all we want to extract the most influental predictors from GLM point of
 Craft some new predictors using our common sense and create subset that has all predictors filled with data. 
 
 ```{r}
+# for glmnet()
+library(glmnet)
+
+# cv.glm (cross-validation of GLM)
+library(boot)
+
 # logistf()
 library(logistf)
 
@@ -38,6 +44,9 @@ source('plotPredictors.R')
 # for ggpairs() function
 library(GGally)
 ```
+
+
+
 ```{r}
 # Load data
 train <- read.csv('train.csv',na.strings=c(""))
@@ -101,7 +110,7 @@ Ok, we have trimmed out dataset from 891 observations to 176. The most truncatin
 ```{r}
 glmfit = glm(Survived~.,data=subset(ccTrain,select=-c(Surname,Cabin,Name,CabinNumber)),family=binomial);
 ```
-This gives use Error. Lets look what variables can cause this. The CabinNumber looks suspicious with 86 levels from 176 observations.
+This gives us Error. Lets look what variables can cause this. The CabinNumber looks suspicious with 86 levels from 176 observations.
 ```{r}
 levels(ccTrain$CabinNumber)
 ```
@@ -180,29 +189,46 @@ confusionMatrix(cTrainTest$Survived, pr)
 ```
 Тотаl accuracy is 0.8233. Accuracy in predicting those who survived is 83% (68/81). Accuracy in predicting those who not survived is 81% (151/185). We can say that sensitivity is 83% while specificity is 81%.
 
+Let's use more exact method of estimating test error - cross-validation.
+```{r}
+# Use 10-fold cross-validation
+glmfit = glm(Survived~.,data=cTrain,family=binomial);
+error = cv.glm(cTrain, glmfit,K=10)
+# standard k-fold CV estimate
+error$delta [1]
+# bias corrected version k-fold CV estimate
+error$delta [2]
+```
+So according to CV accuracy is 0.8565378. Not bad.
 We can also consider interaction of predictors.
-```{r eval=FALSE}
+```{r}
 # Stepwise Regression
 library(MASS)
 glmfit = glm(Survived~.^2, cTrain, family=binomial);
 step <- stepAIC(glmfit, direction="both")
 step$anova # display results
-plot(allEffects(glmfit))
+
 # return initial layout
 par(mfrow=c(1,1))
+error = cv.glm(cTrain, glmfit,K=10)
+# standard k-fold CV estimate
+error$delta [1]
+# bias corrected version k-fold CV estimate
+error$delta [2]
 ```
-However I am not sure how to interpret this interactions.
+Decrease in CV error is small and we get warnings about possible overfit. In addition I am not sure how to interpret this interactions. So we stop on version without interactions.
 
 I should note that because logistic regression doesn't have a specific target function, it is difficult to diagnose the fit. (It is possible to define "residuals" for logistic regression but they are difficult to interpret)[http://alumni.media.mit.edu/~tpminka/courses/36-350.2001/lectures/day31/]. 
 So we will end up with conclusion that the significant predictors are Sex, Age, Pclass, SibSp. With slope and confidence intervals showed above.
 
 ## Using GLM for prediction
-In this section we will use glm to make predictions and will not think about interpretability of the model. 
+In this section we will use GLM to make predictions and will not think about interpretability of the model. 
 
 First of all, lets impute all NA data.
-```{r}
+```{r eval=FALSE}
 # create data from scratch
 train <- read.csv('train.csv',na.strings=c(""))
+train$Survived = factor(train$Survived);
 train$Pclass = factor(train$Pclass);
 cTrain = subset(train, select=-c(PassengerId,Ticket))
 ## Create new predictors
@@ -215,6 +241,7 @@ cTrain$Title = factor(gsub('(.*, )|(\\..*)', '', cTrain$Name))
 # - extract Surnames
 cTrain$Surname <- factor(sapply(cTrain$Name,function(x){x=as.character(x); strsplit(x, split='[,.]')[[1]][1];}))
 
+# impute variables with random forest
 # remove factors with more than 53 levels as missForest don't like it
 mf = missForest(subset(cTrain,select=-c(Surname,Name,CabinNumber,Cabin)))
 # check error
@@ -228,25 +255,44 @@ sapply(cTrain, function(x) sum(is.na(x)))
 Note, that though we didn't use CabinLetter in determing reliabile predictors, we can still use it for overall predictions because [multicollinearity do not make predictions of lm worse](http://blog.minitab.com/blog/adventures-in-statistics/what-are-the-effects-of-multicollinearity-and-when-can-i-ignore-them), it just concerns interpretation of predictors coefficients. 
 
 Let's try to make GLM with all avaliable predictors.
-```{r}
+```{r eval=FALSE}
 # split cTrain on train and test
 set.seed(726) 
 inTrain <- createDataPartition(cTrain$Survived, p = 0.7, list = FALSE)
 cTrainTrain <- cTrain[inTrain, ]
 cTrainTest <- cTrain[-inTrain, ]
 # this gives perfect split error
-#glmfit = glm(Survived~., data=cTrainTrain, family=binomial);
+glmfit = glm(Survived~., data=cTrainTrain, family=binomial);
 ```
-Gives perfect split warning. Use penalized GLM (Firth’s penalized-likelihood logistic regression) instead
-```{r}
+Gives perfect split warning. Try penalized GLM (Firth’s penalized-likelihood logistic regression) instead.
+```{r eval=FALSE}
 # this takes too long too compute
 #glmfit = logistf(Survived~., data=cTrainTrain, family=binomial);
-
-# predict test data
-pr = factor(ifelse(predict(glmfit, newdata = cTrainTest) > 0.5,1,0))
+```
+Penalize work too long, try lasso instead.
+```{r eval=FALSE}
+x = model.matrix(Survived~.,cTrainTrain)[,-1]
+y = cTrainTrain$Survived
+set.seed(1)
+ridgefit = cv.glmnet (x,y,alpha=0, family='binomial', nfolds = 10)
+pr = predict.cv.glmnet(ridgefit, newx, s="lambda.min", type="class")
 confusionMatrix(cTrainTest$Survived, pr)
 
+# coefficients of Ridge
+coef(ridgefit)
 ```
+Not much accuracy for Ridge. Let's try Lasso.
+```{r}
+set.seed(1)
+ridgefit = cv.glmnet (x,y,alpha=1, family='binomial', nfolds = 10)
+pr = predict.cv.glmnet(ridgefit, newx, s="lambda.min", type="class")
+confusionMatrix(cTrainTest$Survived, pr)
+
+# coefficients of Lasso
+coef(ridgefit)
+```
+Much better accuracy.
+Let's look which variables Lasso choose as non-zero.
 
 
 ## Conclusion
