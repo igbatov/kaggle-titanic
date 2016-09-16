@@ -231,7 +231,7 @@ Put predicitons into file.
 test <- read.csv('test.csv',na.strings=c(""))
 cTest = preprocessTitanic(test);
 pr = predict(glmfit, newdata = cTest, type='response')
-write.csv(as.numeric(pr>0.5), file = "TitanicTestPrediction.csv")
+write.csv(data.frame(PassengerId = test$PassengerId, Survived = as.numeric(pr>0.5)), file = "TitanicGLM.csv")
 
 ```
 We can also consider interaction of predictors.
@@ -356,7 +356,7 @@ cTest$Title = factor(cTest$Title)
 Predict once again
 ```{r}
 pr = predict(glmnet_fit, newdata = cTest)
-write.csv(pr, file = "TitanicPRRidge.csv")
+write.csv(data.frame(PassengerId = test$PassengerId, Survived = pr), file = "TitanicRidge.csv")
 ```
 
 
