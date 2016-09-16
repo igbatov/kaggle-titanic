@@ -1,0 +1,103 @@
+
+In this section we will use GLM to make predictions and will not think about interpretability of the model. 
+
+First of all, lets impute all NA data.
+
+```{r eval=FALSE}
+# create data from scratch
+train <- read.csv('train.csv',na.strings=c(""))
+test <- read.csv('test.csv',na.strings=c(""))
+
+cTrain = preprocessTitanic(train);
+cTest = preprocessTitanic(test);
+
+# remove Surname as predict.cv.glm cannot work with uknown factors
+cTrain = subset(cTrain, select=-c(Surname))
+cTest = subset(cTest, select=-c(Surname))
+
+# check that we have no NA data
+sapply(cTrain, function(x) sum(is.na(x)))
+
+# split cTrain on train and test
+set.seed(726) 
+inTrain <- createDataPartition(cTrain$Survived, p = 0.7, list = FALSE)
+cTrainTrain <- cTrain[inTrain, ]
+cTrainTest <- cTrain[-inTrain, ]
+```
+
+Note, that though we didn't use CabinLetter in determing reliabile predictors, we can still use it for overall predictions because [multicollinearity do not make predictions of lm worse](http://blog.minitab.com/blog/adventures-in-statistics/what-are-the-effects-of-multicollinearity-and-when-can-i-ignore-them), it just concerns interpretation of predictors coefficients. 
+
+Let's try to make GLM with all avaliable predictors.
+```{r eval=FALSE}
+# this gives perfect split error
+glmfit = glm(Survived~., data=cTrainTrain, family=binomial);
+pr = predict(glmfit, newdata=cTrainTest[,-1], type="class")
+str(pr)
+confusionMatrix(cTrainTest$Survived, pr)
+
+```
+Gives perfect split warning. Try penalized GLM (Firth’s penalized-likelihood logistic regression) instead.
+```{r eval=FALSE}
+# this takes too long too compute
+#glmfit = logistf(Survived~., data=cTrainTrain, family=binomial);
+```
+Logistf worked too long, try regularize instead.
+```{r}
+set.seed(1)
+x = model.matrix(Survived~.,cTrainTrain)[,-1]
+y = cTrainTrain$Survived
+newx = model.matrix(Survived~.,cTrainTest)[,-1]
+```
+First of all Ridge.
+```{r eval=FALSE}
+ridgefit = cv.glmnet(x,y,alpha=0, family='binomial', nfolds = 10)
+pr = predict.cv.glmnet(ridgefit, newx=newx, s="lambda.min", type="class")
+confusionMatrix(cTrainTest$Survived, pr)
+
+# coefficients of Ridge
+# coef(ridgefit)
+```
+Accuracy : 0.8308. Let's try Lasso.
+```{r}
+lassofit = cv.glmnet (x,y,alpha=1, family='binomial', nfolds = 10)
+pr = predict.cv.glmnet(lassofit, newx=newx, s="lambda.min", type="class")
+confusionMatrix(cTrainTest$Survived, pr)
+```
+Accuracy : 0.8195.
+Let's look which variables Lasso choose as non-zero.
+```{r}
+# coefficients of Lasso
+coef(lassofit)
+```
+Caret tunes alpha as well as lambda - lets try it.
+```{r}
+glmnet_ctrl <- trainControl(method = "cv", number = 10)
+glmnet_fit <- train(Survived ~ ., data = cTrainTrain, method = "glmnet", preProcess = c("center", "scale"), trControl = glmnet_ctrl)
+pr = predict(glmnet_fit, newdata = cTrainTest)
+confusionMatrix(cTrainTest$Survived, pr)
+```
+Write Ridge prediction to file
+```{r}
+set.seed(1)
+# caret tunes alpha as well as lambda http://stats.stackexchange.com/questions/69638/does-caret-train-function-for-glmnet-cross-validate-for-both-alpha-and-lambda
+glmnet_ctrl <- trainControl(method = "cv", number = 10)
+glmnet_fit <- train(Survived ~ ., data = cTrain, method = "glmnet", preProcess = c("center", "scale"), trControl = glmnet_ctrl)
+pr = predict(glmnet_fit, newdata = cTest)
+```
+This gives "Error in model.frame.default(Terms, newdata, na.action = na.action, xlev = object$xlevels) : factor Title has new levels Dona".
+Lets look at them
+```{r}
+subset(cTest, Title == 'Dona')
+```
+Only one, lets change this to the most common women title
+```{r}
+#table(cTrain$Sex, cTrain$Title)
+cTest$Title[cTest$Title=='Dona'] = 'Miss'
+# update levels
+cTest$Title = factor(cTest$Title)
+```
+Predict once again
+```{r}
+pr = predict(glmnet_fit, newdata = cTest)
+write.csv(data.frame(PassengerId = test$PassengerId, Survived = pr), file = "TitanicRidge.csv")
+```

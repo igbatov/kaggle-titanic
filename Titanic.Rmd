@@ -9,9 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Loading and cleaning data.
-First of all we want to extract the most influental predictors from GLM point of view.
-Craft some new predictors using our common sense and create subset that has all predictors filled with data. 
+## Loading libraries
 
 ```{r}
 # for glmnet()
@@ -21,7 +19,7 @@ library(glmnet)
 library(boot)
 
 # logistf()
-library(logistf)
+# library(logistf)
 
 # lda()
 library(MASS)
@@ -43,52 +41,8 @@ source('plotPredictors.R')
 
 # for ggpairs() function
 library(GGally)
-```
-
-
-
-```{r}
-# Load data
-train <- read.csv('train.csv',na.strings=c(""))
-test <- read.csv('test.csv',na.strings=c(""))
-# cast right datatypes on test
-
-# 891 obs.
-dim(train)
-# plot missing variables
-missmap(train);
-# check for variables with bad predictive power
-nearZeroVar(train,saveMetrics= TRUE)
-# check how many NA values each predictor has
-sapply(train, function(x) sum(is.na(x)))
-# check how many unique valies each predictor has
-sapply(train, function(x) length(unique(x)))
-
-# Clean #1 
-# -  remove NA cells
-cTrain = na.omit(train)
-# 891 obs.
-dim(cTrain)
-# - remove unnecesarry predictors
-cTrain = subset(cTrain, select = -c(PassengerId,Ticket) )
-# - set right predictor types
-str(cTrain)
-cTrain$Survived = factor(cTrain$Survived)
-cTrain$Pclass = factor(cTrain$Pclass)
-
-## Create new predictors
-#  - extract Deck from Cabin
-cTrain$CabinLetter = factor(substr(cTrain$Cabin, 1, 1))
-#  - extract cabin number from Cabin
-cTrain$CabinNumber = factor(as.numeric(substr(cTrain$Cabin, 2, 4)))
-#  - extract title
-cTrain$Title = factor(gsub('(.*, )|(\\..*)', '', cTrain$Name))
-# - extract Surnames
-cTrain$Surname <- factor(sapply(cTrain$Name, function(x){x=as.character(x); strsplit(x, split = '[,.]')[[1]][1];}))
-```
 
 ## Preprocess funciton
-```{r}
 preprocessTitanic = function (data){
   if("Survived" %in% colnames(data)){
     data$Survived = factor(data$Survived);
@@ -115,263 +69,15 @@ preprocessTitanic = function (data){
   return (cData)
 }
 ```
-
-```{r}
-# Clean #2 
-# - remove all rows with empty Deck
-ccTrain = subset(cTrain, CabinLetter != '')
-dim(ccTrain)
-# - remove all not-numeric CabinNumber
-ccTrain = subset(ccTrain, !is.na(CabinNumber))
-dim(ccTrain)
-# - remove all not-numeric CabinNumber
-ccTrain = subset(ccTrain, Embarked != '')
-dim(ccTrain)
-# - make CabinNumber to be a factor
-ccTrain$CabinNumber = factor(ccTrain$CabinNumber);
+## GLM for interpretation
+```{r child = 'GLM.Rmd'}
 ```
-
-Ok, we have trimmed out dataset from 891 observations to 176. The most truncating predictor was the CabinLetter. Using GLM we will try to determine if CabinLetter is important and if there is need to impute it or we can safely ignore it completely.
-
-```{r}
-glmfit = glm(Survived~.,data=subset(ccTrain,select=-c(Surname,Cabin,Name,CabinNumber)),family=binomial);
-```
-This gives us Error. Lets look what variables can cause this. The CabinNumber looks suspicious with 86 levels from 176 observations.
-```{r}
-levels(ccTrain$CabinNumber)
-```
-Let's exclude this from predictors.
-
-```{r}
-glmfit = glm(Survived~.,data=subset(ccTrain,select=-c(Surname,Cabin,Name,CabinNumber)),family=binomial);
-
-summary(glmfit)
-```
-This gives no confident coefficients for any variable. This can be because of predictors multicollinearity. To quote [A protocol for data exploration to avoid common statistical problems](http://onlinelibrary.wiley.com/doi/10.1111/j.2041-210X.2009.00001.x/full) "If collinearity is ignored, one is likely to end up with a confusing statistical analysis in which nothing is significant, but where dropping one covariate can make the others significant, or even change the sign of estimated parameters." Lets check variance inflation factor (VIFs).
-
-```{r}
-corvif(subset(ccTrain,select=-c(Surname,Cabin,Name,CabinNumber)))
-```
-Shows big GVIF (>4) for Pclass, Sex, CabinLetter, Title. Alain F. Zuur suggested to just drop predictors with high VIFs from the highest one by one.
-```{r}
-corvif(subset(ccTrain,select=-c(Surname,Cabin,Name,CabinNumber,Title)))
-```
-Now dropping CabinLetter.
-```{r}
-corvif(subset(ccTrain,select=-c(Surname,Cabin,Name,CabinNumber,Title, CabinLetter)))
-```
-Now all looks well in terms of VIFs.
-```{r}
-glmfit = glm(Survived~.,data=subset(ccTrain,select=-c(Surname,Cabin,Name,CabinNumber,Title,CabinLetter)),family=binomial);
-summary(glmfit)
-```
-Much better.
-
-We saw that there is no use in columns Surname,Cabin,Name,CabinNumber,Title,CabinLetter for glm model that we want to interpret. Let's create glm ignoring these columns and using whole training data and try to check what predictors are the most reliable.
-```{r}
-cTrain = subset(train,select=-c(Cabin,Name,Ticket,PassengerId))
-#impute Age - this will give us extra 0.01 in prediction accuaracy
-cTrain$Age[is.na(cTrain$Age)] <- mean(cTrain$Age,na.rm=T)
-cTrain = na.omit(cTrain)
-dim(cTrain)
-cTrain$Survived = factor(cTrain$Survived)
-cTrain$Pclass = factor(cTrain$Pclass)
-glmfit = glm(Survived~.,data=cTrain,family=binomial);
-summary(glmfit)
-```
-We see that the reliable predictors are the same as those we saw on partial data glm plus Pclass and SibSp
-VIFs are also ok for the whole data.
-```{r}
-corvif(cTrain)
-```
-
-It is also useful to make predictors vs response plot and look for visual trends and non-linearities. Again, quoting [A protocol for data exploration to avoid common statistical problems](http://onlinelibrary.wiley.com/doi/10.1111/j.2041-210X.2009.00001.x/full) "Note that the absence of clear patterns does not mean that there are no relationships; it just means that there are no clear two-way relationships. A model with multiple explanatory variables may still provide a good fit."
-```{r}
-plotPredictors('Survived',cTrain)
-``` 
-
-Plot glm predictions to interpret every predictor.
-
-```{r}
-library(effects)
-plot(allEffects(glmfit))
-```
-
-Finally get confusion matrix for this model
-```{r}
-# split cTrain on train and test
-set.seed(726) 
-inTrain <- createDataPartition(cTrain$Survived, p = 0.7, list = FALSE)
-cTrainTrain <- cTrain[inTrain, ]
-cTrainTest <- cTrain[-inTrain, ]
-# check how data is splitted
-table(cTrainTrain$Survived)
-table(cTrainTest$Survived)
-# make model fit on train data
-glmfit = glm(Survived~.,data=cTrainTrain,family=binomial);
-# predict test data
-pr = factor(ifelse(predict(glmfit, newdata = cTrainTest) > 0.5,1,0))
-confusionMatrix(cTrainTest$Survived, pr)
-```
-Тотаl accuracy is 0.8233. Accuracy in predicting those who survived is 83% (68/81). Accuracy in predicting those who not survived is 81% (151/185). We can say that sensitivity is 83% while specificity is 81%.
-
-Let's use more exact method of estimating test error - cross-validation.
-```{r}
-# Use 10-fold cross-validation
-glmfit = glm(Survived~.,data=cTrain,family=binomial);
-error = cv.glm(cTrain, glmfit,K=10)
-# standard k-fold CV estimate
-error$delta [1]
-# bias corrected version k-fold CV estimate
-error$delta [2]
-```
-So according to CV accuracy is 0.8565378. Not bad.
-Put predicitons into file.
-```{r}
-test <- read.csv('test.csv',na.strings=c(""))
-cTest = preprocessTitanic(test);
-pr = predict(glmfit, newdata = cTest, type='response')
-write.csv(data.frame(PassengerId = test$PassengerId, Survived = as.numeric(pr>0.5)), file = "TitanicGLM.csv")
-
-```
-We can also consider interaction of predictors.
-```{r}
-# Stepwise Regression
-library(MASS)
-glmfit = glm(Survived~.^2, cTrain, family=binomial);
-step <- stepAIC(glmfit, direction="both")
-step$anova # display results
-
-# return initial layout
-par(mfrow=c(1,1))
-error = cv.glm(cTrain, glmfit,K=10)
-# standard k-fold CV estimate
-error$delta [1]
-# bias corrected version k-fold CV estimate
-error$delta [2]
-```
-Decrease in CV error is small and we get warnings about possible overfit. In addition I am not sure how to interpret this interactions. So we stop on version without them.
-
-I should note that because logistic regression doesn't have a specific target function, it is difficult to diagnose the fit. (It is possible to define "residuals" for logistic regression but they are difficult to interpret)[http://alumni.media.mit.edu/~tpminka/courses/36-350.2001/lectures/day31/]. 
-So we will end up with conclusion that the significant predictors are Sex, Age, Pclass, SibSp. With slope and confidence intervals showed above.
 
 ## Using GLM for prediction
-In this section we will use GLM to make predictions and will not think about interpretability of the model. 
-
-First of all, lets impute all NA data.
-
-```{r eval=FALSE}
-# create data from scratch
-train <- read.csv('train.csv',na.strings=c(""))
-test <- read.csv('test.csv',na.strings=c(""))
-
-cTrain = preprocessTitanic(train);
-cTest = preprocessTitanic(test);
-
-# remove Surname as predict.cv.glm cannot work with uknown factors
-cTrain = subset(cTrain, select=-c(Surname))
-cTest = subset(cTest, select=-c(Surname))
-
-# check that we have no NA data
-sapply(cTrain, function(x) sum(is.na(x)))
-
-# split cTrain on train and test
-set.seed(726) 
-inTrain <- createDataPartition(cTrain$Survived, p = 0.7, list = FALSE)
-cTrainTrain <- cTrain[inTrain, ]
-cTrainTest <- cTrain[-inTrain, ]
+```{r child = 'Ridge.Rmd'}
 ```
-
-Note, that though we didn't use CabinLetter in determing reliabile predictors, we can still use it for overall predictions because [multicollinearity do not make predictions of lm worse](http://blog.minitab.com/blog/adventures-in-statistics/what-are-the-effects-of-multicollinearity-and-when-can-i-ignore-them), it just concerns interpretation of predictors coefficients. 
-
-Let's try to make GLM with all avaliable predictors.
-```{r eval=FALSE}
-# this gives perfect split error
-glmfit = glm(Survived~., data=cTrainTrain, family=binomial);
-pr = predict(glmfit, newdata=cTrainTest[,-1], type="class")
-str(pr)
-confusionMatrix(cTrainTest$Survived, pr)
-
-```
-Gives perfect split warning. Try penalized GLM (Firth’s penalized-likelihood logistic regression) instead.
-```{r eval=FALSE}
-# this takes too long too compute
-#glmfit = logistf(Survived~., data=cTrainTrain, family=binomial);
-```
-Logistf worked too long, try regularize instead.
-```{r}
-set.seed(1)
-x = model.matrix(Survived~.,cTrainTrain)[,-1]
-y = cTrainTrain$Survived
-newx = model.matrix(Survived~.,cTrainTest)[,-1]
-```
-First of all Ridge.
-```{r eval=FALSE}
-ridgefit = cv.glmnet(x,y,alpha=0, family='binomial', nfolds = 10)
-pr = predict.cv.glmnet(ridgefit, newx=newx, s="lambda.min", type="class")
-confusionMatrix(cTrainTest$Survived, pr)
-
-# coefficients of Ridge
-# coef(ridgefit)
-```
-Accuracy : 0.8308. Let's try Lasso.
-```{r}
-lassofit = cv.glmnet (x,y,alpha=1, family='binomial', nfolds = 10)
-pr = predict.cv.glmnet(lassofit, newx=newx, s="lambda.min", type="class")
-confusionMatrix(cTrainTest$Survived, pr)
-```
-Accuracy : 0.8195.
-Let's look which variables Lasso choose as non-zero.
-```{r}
-# coefficients of Lasso
-coef(lassofit)
-```
-Caret tunes alpha as well as lambda - lets try it.
-```{r}
-glmnet_ctrl <- trainControl(method = "cv", number = 10)
-glmnet_fit <- train(Survived ~ ., data = cTrainTrain, method = "glmnet", preProcess = c("center", "scale"), trControl = glmnet_ctrl)
-pr = predict(glmnet_fit, newdata = cTrainTest)
-confusionMatrix(cTrainTest$Survived, pr)
-```
-Write Ridge prediction to file
-```{r}
-set.seed(1)
-# caret tunes alpha as well as lambda http://stats.stackexchange.com/questions/69638/does-caret-train-function-for-glmnet-cross-validate-for-both-alpha-and-lambda
-glmnet_ctrl <- trainControl(method = "cv", number = 10)
-glmnet_fit <- train(Survived ~ ., data = cTrain, method = "glmnet", preProcess = c("center", "scale"), trControl = glmnet_ctrl)
-pr = predict(glmnet_fit, newdata = cTest)
-```
-This gives "Error in model.frame.default(Terms, newdata, na.action = na.action, xlev = object$xlevels) : factor Title has new levels Dona".
-Lets look at them
-```{r}
-subset(cTest, Title == 'Dona')
-```
-Only one, lets change this to the most common women title
-```{r}
-table(cTrain$Sex, cTrain$Title)
-cTest$Title[cTest$Title=='Dona'] = 'Miss'
-# update levels
-cTest$Title = factor(cTest$Title)
-```
-Predict once again
-```{r}
-pr = predict(glmnet_fit, newdata = cTest)
-write.csv(data.frame(PassengerId = test$PassengerId, Survived = pr), file = "TitanicRidge.csv")
-```
-
 
 ## Final prediction
-```{r}
-set.seed(1)
-x = model.matrix(Survived~.,cTrain)[,-1]
-y = cTrain$Survived
-lassofit = cv.glmnet (x, y, alpha=1, family='binomial', nfolds = 10)
 
-## preprocess test data
-test <- read.csv('test.csv',na.strings=c(""))
-cTest = preprocessTitanic(test);
-
-pr = predict.cv.glmnet(lassofit, newx=cTest, s="lambda.min", type="class")
-```
 ## Conclusion
 There is an opinion that for data with small number of observation we should minimize variance and thus select models with many constrains, such as lm, glm, lda. For data with many observations, we can guess that sample distribution is close to real one and thus we just need to fit it well (and minimize bias instead of variance), so tree models, QDA, KNN and others that tend to overfit gives better results.
