@@ -1,0 +1,25 @@
+
+```{r eval=FALSE}
+# create data from scratch
+train <- read.csv('train.csv',na.strings=c(""))
+test <- read.csv('test.csv',na.strings=c(""))
+
+cTrain = preprocessTitanic(train);
+cTest = preprocessTitanic(test);
+
+# remove Surname as predict.cv.glm cannot work with uknown factors
+cTrain = subset(cTrain, select=-c(Surname))
+cTest = subset(cTest, select=-c(Surname))
+```
+
+```{r}
+library(gam)
+
+
+gamfit = gam(cTrain$Survived ~ Pclass + Sex + s(Age, df=5) + s(SibSp, df=5) + s(Parch, df=5) + s(Fare, df=5) + Embarked + CabinLetter + Title, family=binomial, data=cTrain)
+
+
+par(mfrow=c(3,3))
+plot(gamfit, se=T, col="green")
+```
+
