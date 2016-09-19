@@ -77,6 +77,12 @@ preprocessTitanic = function (data){
 ```{r child = 'Ridge.Rmd'}
 ```
 
+## Using KNN for prediction
+```{r child = 'KNN.Rmd'}
+```
+
+
+
 ## Final prediction
 
 ## Conclusion

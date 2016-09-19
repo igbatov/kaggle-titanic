@@ -1,0 +1,35 @@
+Again read and preprocess data from scratch.
+
+```{r eval=FALSE}
+# create data from scratch
+train <- read.csv('train.csv',na.strings=c(""))
+test <- read.csv('test.csv',na.strings=c(""))
+
+cTrain = preprocessTitanic(train);
+cTest = preprocessTitanic(test);
+
+# remove Surname as predict.cv.glm cannot work with uknown factors
+cTrain = subset(cTrain, select=-c(Surname))
+cTest = subset(cTest, select=-c(Surname))
+```
+
+Now calibrate k for KNN using cross-validation.
+```{r}
+set.seed(1)
+# Cross-Validated (10 fold, repeated 3 times)
+ctrl <- trainControl(method="repeatedcv",repeats = 3) 
+# preprocess scale is very important in KNN
+knnFit <- train(Survived ~ ., data = cTrain, method = "knn", trControl = ctrl, preProcess = c("scale"), tuneGrid = expand.grid(k=seq(from=1, to=10, by=1)))
+plot(knnFit)
+knnFit
+```
+It seems that k=5 gives the best accuracy.
+Predict test data with 5-KNN
+```{r}
+# remove new factor in Title
+cTest$Title[cTest$Title=='Dona'] = 'Miss'
+# update levels
+cTest$Title = factor(cTest$Title)
+pr <- predict(knnFit,newdata = cTest)
+write.csv(data.frame(PassengerId = test$PassengerId, Survived = pr), file = "TitanicKNN.csv")
+```
