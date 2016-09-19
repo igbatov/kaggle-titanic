@@ -10,16 +10,53 @@ cTest = preprocessTitanic(test);
 # remove Surname as predict.cv.glm cannot work with uknown factors
 cTrain = subset(cTrain, select=-c(Surname))
 cTest = subset(cTest, select=-c(Surname))
+
+# remove new factor level from test
+cTest$Title[cTest$Title=='Dona'] = 'Miss'
+# update levels
+cTest$Title = factor(cTest$Title)
 ```
 
 ```{r}
 library(gam)
-
-
 gamfit = gam(cTrain$Survived ~ Pclass + Sex + s(Age, df=5) + s(SibSp, df=5) + s(Parch, df=5) + s(Fare, df=5) + Embarked + CabinLetter + Title, family=binomial, data=cTrain)
 
-
-par(mfrow=c(3,3))
-plot(gamfit, se=T, col="green")
+# We cannot use plot.gam it intercepts in misterious way with mgcv's plot.gam, that is loaded somewhere with 'car' package
+# plot(gamfit,se=T,col="green")
+probs = predict(gamfit,newdata = cTrain[,-1], type = 'response')
+pr = ifelse(probs>0.5, 1, 0)
 ```
 
+```{r}
+# plot training dataframe predictors X vs actual response Y and predicted response P 
+plotGamfit = function(x,y,p,df){
+  for ( i in seq(1,length( x ),1) ){
+    if(class(x[,i]) == 'factor'){
+      plot(x[,i],p,main = colnames(x)[i])
+    }
+  }
+}
+par(mfrow=c(3,3))
+plotGamfit(cTrain[,-1],cTrain[,1],probs,df=5)
+
+#lines(cTrain$Age, predict(lm(probs~s(cTrain$Age,df=5))), col='green', lty=5)
+
+# mgcv gam does not like factor levels that is not valid R names, so convert here
+#levels(cTrain$Pclass) = c("first", "second", "third")
+#levels(cTrain$Survived) = c("yes", "no")
+#cctrl1 <- trainControl(method = "cv", number = 3, returnResamp = "all", classProbs = TRUE);
+#gamfit = train(Survived~Pclass+Sex+s(Age,k=5)+s(SibSp,k=5)+s(Parch,k=5)+s(Fare,k=5)+Embarked+CabinLetter+Title, method = "gam", trControl = cctrl1, preProc = c("scale"), family=binomial, data=cTrain);
+
+#gamfit = gam(cTrain$Survived~Pclass+Sex+s(Age,k=5)+s(SibSp,k=5)+s(Parch,k=5)+s(Fare,k=5)+Embarked+CabinLetter+Title,family=binomial, data=cTrain)
+
+#dat <- gamSim(3,n=400)
+
+#par(mfrow=c(3,3))
+#plot(gamfit)
+```
+Predict test
+```{r}
+probs = predict(gamfit,newdata = cTest, type = 'response')
+pr = ifelse(probs>0.5, 1, 0)
+write.csv(data.frame(PassengerId = test$PassengerId, Survived = pr), file = "TitanicGAM.csv")
+```

@@ -1,5 +1,5 @@
 ---
-title: "Titanic data exploration using GLM, KNN, SVN, xgboost, random forests"
+title: "Titanic data exploration using GLM, KNN, GAM, SVN, xgboost, random forests and their ensemble"
 author: "Igor Batov"
 date: "August 28, 2016"
 output: html_document
@@ -76,6 +76,8 @@ preprocessTitanic = function (data){
 ## Using GLM for prediction
 ```{r child = 'Ridge.Rmd'}
 ```
+
+
 
 ## Final prediction
 
