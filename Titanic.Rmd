@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Loading libraries
 
-```{r}
+```{r message=F, warning=F}
 # for glmnet()
 library(glmnet)
 
@@ -39,10 +39,13 @@ source("HighstatLibV6.R")
 # plotPredictors()
 source('plotPredictors.R')
 
+# various little helper functions
+source('helper.R')
+
 # for ggpairs() function
 library(GGally)
 
-## Preprocess funciton
+## Preprocess funciton - drop unnecesarry, impute, extract new ones
 preprocessTitanic = function (data){
   if("Survived" %in% colnames(data)){
     data$Survived = factor(data$Survived);
@@ -68,9 +71,14 @@ preprocessTitanic = function (data){
   cData = cbind(mf$ximp,subset(cData,select=c(Surname)))
   return (cData)
 }
+
+## aggregate factor levels in meaningful ones
+shrinkFactors = function(df){
+  
+}
 ```
 ## GLM for interpretation
-```{r child = 'GLM.Rmd'}
+```{r child = 'GLM.Rmd' eval=FALSE}
 ```
 
 ## Using GLM for prediction
@@ -78,7 +86,7 @@ preprocessTitanic = function (data){
 ```
 
 ## Using KNN for prediction
-```{r child = 'KNN.Rmd'}
+```{r child = 'KNN.Rmd' eval=FALSE}
 ```
 
 

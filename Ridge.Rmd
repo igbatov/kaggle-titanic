@@ -3,7 +3,7 @@ In this section we will use GLM to make predictions and will not think about int
 
 First of all, lets impute all NA data.
 
-```{r eval=FALSE}
+```{r}
 # create data from scratch
 train <- read.csv('train.csv',na.strings=c(""))
 test <- read.csv('test.csv',na.strings=c(""))
@@ -11,7 +11,7 @@ test <- read.csv('test.csv',na.strings=c(""))
 cTrain = preprocessTitanic(train);
 cTest = preprocessTitanic(test);
 
-# remove Surname as predict.cv.glm cannot work with uknown factors
+# remove Surname as predict.cv.glm cannot work with uknown factors in test set
 cTrain = subset(cTrain, select=-c(Surname))
 cTest = subset(cTest, select=-c(Surname))
 
@@ -36,68 +36,52 @@ str(pr)
 confusionMatrix(cTrainTest$Survived, pr)
 
 ```
+
 Gives perfect split warning. Try penalized GLM (Firth’s penalized-likelihood logistic regression) instead.
 ```{r eval=FALSE}
 # this takes too long too compute
 #glmfit = logistf(Survived~., data=cTrainTrain, family=binomial);
 ```
-Logistf worked too long, try regularize instead.
+
+Logistf worked too long, try to regularize variables instead.
 ```{r}
+cTest$Title[cTest$Title=='Dona'] = 'Miss'
+# update levels
+cTest$Title = factor(cTest$Title)
+
 set.seed(1)
 x = model.matrix(Survived~.,cTrainTrain)[,-1]
 y = cTrainTrain$Survived
 newx = model.matrix(Survived~.,cTrainTest)[,-1]
-```
-First of all Ridge.
-```{r eval=FALSE}
-ridgefit = cv.glmnet(x,y,alpha=0, family='binomial', nfolds = 10)
-pr = predict.cv.glmnet(ridgefit, newx=newx, s="lambda.min", type="class")
-confusionMatrix(cTrainTest$Survived, pr)
 
-# coefficients of Ridge
-# coef(ridgefit)
-```
-Accuracy : 0.8308. Let's try Lasso.
-```{r}
-lassofit = cv.glmnet (x,y,alpha=1, family='binomial', nfolds = 10)
-pr = predict.cv.glmnet(lassofit, newx=newx, s="lambda.min", type="class")
-confusionMatrix(cTrainTest$Survived, pr)
-```
-Accuracy : 0.8195.
-Let's look which variables Lasso choose as non-zero.
-```{r}
-# coefficients of Lasso
-coef(lassofit)
-```
-Caret tunes alpha as well as lambda - lets try it.
-```{r}
-glmnet_ctrl <- trainControl(method = "cv", number = 10)
-glmnet_fit <- train(Survived ~ ., data = cTrainTrain, method = "glmnet", preProcess = c("center", "scale"), trControl = glmnet_ctrl)
-pr = predict(glmnet_fit, newdata = cTrainTest)
-confusionMatrix(cTrainTest$Survived, pr)
-```
-Write Ridge prediction to file
-```{r}
-set.seed(1)
-# caret tunes alpha as well as lambda http://stats.stackexchange.com/questions/69638/does-caret-train-function-for-glmnet-cross-validate-for-both-alpha-and-lambda
-glmnet_ctrl <- trainControl(method = "cv", number = 10)
-glmnet_fit <- train(Survived ~ ., data = cTrain, method = "glmnet", preProcess = c("center", "scale"), trControl = glmnet_ctrl)
-pr = predict(glmnet_fit, newdata = cTest)
-```
-This gives "Error in model.frame.default(Terms, newdata, na.action = na.action, xlev = object$xlevels) : factor Title has new levels Dona".
-Lets look at them
-```{r}
-subset(cTest, Title == 'Dona')
-```
-Only one, lets change this to the most common women title
-```{r}
-#table(cTrain$Sex, cTrain$Title)
-cTest$Title[cTest$Title=='Dona'] = 'Miss'
-# update levels
-cTest$Title = factor(cTest$Title)
-```
-Predict once again
-```{r}
-pr = predict(glmnet_fit, newdata = cTest)
-write.csv(data.frame(PassengerId = test$PassengerId, Survived = pr), file = "TitanicRidge.csv")
+createCSV = function(model, newData, PassengerId, filename){
+  pr = predict(model, newdata = newData)
+  write.csv(data.frame(PassengerId = PassengerId, Survived = pr), file = filename)
+}
+
+createRidge = function(x,y,newData,PassengerId,filename){
+  ridgefit = cv.glmnet(x,y,alpha=0, family='binomial', nfolds = 10)
+  pr = predict.cv.glmnet(ridgefit, newx=newx, s="lambda.min", type="class")
+  createCSV(ridgefit,newData,PassengerId,filename);
+}
+
+createLasso = function(x,y,newData,PassengerId,filename){
+  lassofit = cv.glmnet (x,y,alpha=1, family='binomial', nfolds = 10)
+  pr = predict.cv.glmnet(lassofit, newx=newx, s="lambda.min", type="class")
+  createCSV(lassofit,newData,PassengerId,filename);
+}
+
+createCaret = function(data,newData,PassengerId,filename){
+  # caret tunes alpha as well as lambda http://stats.stackexchange.com/questions/69638/does-caret-train-function-for-glmnet-cross-validate-for-both-alpha-and-lambda
+  glmnet_ctrl <- trainControl(method = "cv", number = 10)
+#  glmnet_fit <- train(Survived ~ ., data = data, method = "glmnet", preProcess = c("scale"), trControl = glmnet_ctrl)
+  glmnet_fit <- train(Survived ~ ., data = data, method = "glmnet", trControl = glmnet_ctrl)
+  pr = predict(glmnet_fit, newdata = newData)
+  createCSV(glmnet_fit,newData,PassengerId,filename);
+}
+
+createCaret(cTrain[cTrain$Sex == 'male',], cTest[cTest$Sex == 'male',],test[test$Sex == 'male', ]$PassengerId,'TitanicRidgeMale.csv');
+
+createCaret(cTrain[cTrain$Sex == 'female',], cTest[cTest$Sex == 'female',],test[test$Sex == 'female', ]$PassengerId,'TitanicRidgeFemale.csv');
+
 ```

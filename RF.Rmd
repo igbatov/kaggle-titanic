@@ -19,9 +19,35 @@ cTest$Title = factor(cTest$Title)
 ```{r}
 library(randomForest)
 set.seed (1)
-rffit = randomForest( Survived~., data=cTrain, mtry=9, importance =TRUE)
 levels(cTest$CabinLetter) = levels(cTrain$CabinLetter)
 levels(cTest$Title) = levels(cTrain$Title)
+
+# assess error with CV
+acc = 0;
+cvNUm = 3;
+for(i in c(1:cvNum)){
+  inTrain <- createDataPartition(cTrain$Survived, p = 0.7, list = FALSE)
+  cTrainTrain <- cTrain[inTrain, ]
+  cTrainTest <- cTrain[-inTrain, ]
+  rffit = randomForest(Survived~., data=cTrainTrain, importance=TRUE, ntree=2000)
+  pr = predict(rffit, newdata = cTrainTest)
+  cm = confusionMatrix(cTrainTest$Survived, pr)
+  acc = acc + cm$overall[['Accuracy']]
+}
+acc = acc / cvNum;
+print(acc)
+
+# predict
+rffit = randomForest(Survived~., data=cTrain, importance=TRUE, ntree=2000)
+pr = predict(rffit, newdata = cTest)
+write.csv(data.frame(PassengerId = test$PassengerId, Survived = pr), file = "TitanicRF.csv")
+varImpPlot(rffit)
+```
+
+```{r}
+library(party)
+rffit <- cforest(Survived~., data = cTrain, controls=cforest_unbiased(ntree=2000, mtry=3))
 pr = predict(rffit, newdata = cTest)
 write.csv(data.frame(PassengerId = test$PassengerId, Survived = pr), file = "TitanicRF.csv")
 ```
+
